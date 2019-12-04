@@ -19,6 +19,7 @@ int main()
 	if(listening == INVALID_SOCKET)
 	{
 		std::cerr << "Error initializing listening socket.\n";
+		WSACleanup();
 		return -1;
 	}
 
@@ -60,16 +61,21 @@ int main()
 	{
 		ZeroMemory(buf, 4096);
 		int bytes_received = recv(client_socket, buf, 4096, 0);
-		if (bytes_received == SOCKET_ERROR)
-		{
-			std::cerr << "Error in receiving bytes from client.\n";
-		}
 
 		if (bytes_received == 0)
 		{
 			std::cout << "Client disconnected.\n";
 			break;
 		}
+
+
+		if (bytes_received == SOCKET_ERROR)
+		{
+			std::cerr << "Error in receiving bytes from client.\n";
+			break;
+		}
+
+
 
 		send(client_socket, buf, bytes_received + 1, 0);
 	}
