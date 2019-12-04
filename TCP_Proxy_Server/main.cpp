@@ -1,7 +1,7 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <string>
-#include "TCP_Proxy_Server/TCP_Listener.h"
+#include "TCP_Listener.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
