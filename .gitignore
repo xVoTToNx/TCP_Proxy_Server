@@ -1,3 +1,7 @@
 **/Debug
 **/.vs
+<<<<<<< HEAD
 *.sln
+=======
+*.sln
+>>>>>>> 2be8653dbf1f00850c553d50df00659ac7efda11
