@@ -1,7 +1,3 @@
-TCP_Proxy/Debug
-TCP_Proxy/.vs
-TCP_Proxy/TCP_Proxy.sln
-
-TCP_Proxy_Client/Debug
-TCP_Proxy_Client/.vs
-TCP_Proxy_Client/TCP_Proxy.sln
+**/Debug
+**/.vs
+*.sln
