@@ -1,9 +1,9 @@
 #include "TCP_Listener.h"
 
 TCPListener::TCPListener(std::string ip_adress, int port, MessageHandler handler)
-	: m_ip_adress (ip_adress)
-	, m_port (port)
-	, m_handler (handler)
+	: m_ip_adress(ip_adress)
+	, m_port(port)
+	, m_handler(handler)
 {
 }
 
@@ -31,6 +31,8 @@ void TCPListener::Run()
 	char buf[BUFFER_SIZE];
 	while (true)
 	{
+		SOCKET db;
+		SOCKET client;
 		SOCKET listening = CreateListenerSocket();
 		if (listening == INVALID_SOCKET)
 		{
@@ -46,26 +48,77 @@ void TCPListener::Run()
 		{
 			fd_set copy_connections = connections;
 			int connections_count = select(0, &copy_connections, nullptr, nullptr, nullptr);
-
 			for (int i = 0; i < connections_count; ++i)
 			{
 				SOCKET current_socket = copy_connections.fd_array[i];
 				if (current_socket == listening)
 				{
 					SOCKET new_client = accept(listening, nullptr, nullptr);
+					client = new_client;
 					FD_SET(new_client, &connections);
 
-					for (int i = 0; i < connections.fd_count; ++i)
+
+
+
+
+
+
+
+
+					db = socket(AF_INET, SOCK_STREAM, 0);
+					if (db == INVALID_SOCKET)
 					{
-						SOCKET out_socket = connections.fd_array[i];
-						if (out_socket != listening)
-						{
-							std::ostringstream sstream;
-							sstream << new_client << "  ENTERED THE SERVER\n\r";
-							std::string message = sstream.str();
-							send(out_socket, message.c_str(), message.size() + 1, 0);
-						}
+						std::cerr << "Error initializing listening socket.\n";
+						return;
 					}
+
+					sockaddr_in hint;
+					hint.sin_family = AF_INET;
+					hint.sin_port = htons(3306);
+					std::string ip_adress("127.0.0.1");
+					inet_pton(AF_INET, ip_adress.c_str(), &hint.sin_addr);
+
+					int connect_result = connect(db, reinterpret_cast<sockaddr*>(&hint), sizeof(hint));
+					if (connect_result == SOCKET_ERROR)
+					{
+						std::cerr << "Connection error " << WSAGetLastError() << "\n";
+						return;
+					}
+
+					FD_SET(db, &connections);
+
+					ZeroMemory(buf, BUFFER_SIZE);
+					int bytes = recv(db, buf, BUFFER_SIZE, 0);
+					send(new_client, buf, bytes, 0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+					//for (int i = 0; i < connections.fd_count; ++i)
+					//{
+					//	SOCKET out_socket = connections.fd_array[i];
+					//	if (out_socket != listening)
+					//	{
+					//		std::ostringstream sstream;
+					//		sstream << new_client << "  ENTERED THE SERVER\n\r";
+					//		std::string message = sstream.str();
+					//		//send(out_socket, message.c_str(), message.size() + 1, 0);
+					//	}
+					//}
 				}
 				else
 				{
@@ -73,27 +126,40 @@ void TCPListener::Run()
 					ZeroMemory(buf, BUFFER_SIZE);
 
 					int byte_received = recv(current_socket, buf, BUFFER_SIZE, 0);
+
 					if (byte_received > 0)
 					{
-						if (std::string(buf, 0, byte_received) != "\r\n" &&
-							std::string(buf, 0, byte_received) != "\n")
+						if (current_socket == db)
 						{
-							for (int i = 0; i < connections.fd_count; ++i)
-							{
-								SOCKET out_socket = connections.fd_array[i];
-								if (out_socket != listening && out_socket != current_socket)
-								{
-									std::string to_send(buf, 0, byte_received + 1);
-
-									std::ostringstream sstream;
-									sstream << current_socket << ": " << to_send;
-									if (to_send[to_send.length() - 1] != 10)
-										sstream << "\n\r";
-									std::string message = sstream.str();
-									send(out_socket, message.c_str(), message.size(), 0);
-								}
-							}
+							std::cout << "TO CLIENT\n";
+							send(client, buf, byte_received, 0);
 						}
+						else if (current_socket == client)
+						{
+							std::cout << "TO DB\n";
+							send(db, buf, byte_received, 0);
+						}
+						//if (std::string(buf, 0, byte_received) != "\r\n" &&
+						//	std::string(buf, 0, byte_received) != "\n")
+						//{
+						//	for (int i = 0; i < connections.fd_count; ++i)
+						//	{
+						//		SOCKET out_socket = connections.fd_array[i];
+						//		if (out_socket != listening && out_socket == current_socket)
+						//		{
+						//			std::string to_send(buf, 0, byte_received + 1);
+
+						//			std::ostringstream sstream;
+						//			sstream << current_socket << ": " << to_send;
+						//			if (to_send[to_send.length() - 1] != 10)
+						//				sstream << "\n\r";
+						//			std::string message = sstream.str();
+						//			std::cout << "START SEND\n";
+						//			send(out_socket, message.c_str(), message.size(), 0);
+						//			std::cout << "END SEND\n";
+						//		}
+						//	}
+						//}
 					}
 					else
 					{
@@ -148,7 +214,7 @@ SOCKET TCPListener::CreateListenerSocket()
 		if (bindOK != SOCKET_ERROR)
 		{
 			int listenOK = listen(new_socket, SOMAXCONN);
-			if (listenOK == SOCKET_ERROR)
+			if (listenOK == SOCKET_ERROR) 
 			{
 				return INVALID_SOCKET;
 			}
