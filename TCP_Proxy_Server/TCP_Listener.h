@@ -5,10 +5,14 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <map>
+#include <memory>
 
 #pragma comment(lib, "ws2_32.lib")
 
+#include "Logger.h"
+
 #define BUFFER_SIZE (4096)
+#define LOG_PATH ("log.txt")
 
 class TCPListener
 {
@@ -25,6 +29,12 @@ private:
 	SOCKET createListenerSocket();
 	int acceptNewConnection(char* buf, int length);
 	SOCKET waitForConnection(SOCKET listen_socket);
+	void closePairOfSockets(SOCKET proxy, SOCKET client);
+	std::string sockaddrToString(sockaddr_in& address);
+	void log(std::string str);
+	void log_error(std::string str);
+
+
 
 	std::string m_ip_adress;
 	int m_port;
@@ -34,5 +44,7 @@ private:
 	fd_set m_sockets;
 	std::map<SOCKET, std::pair<SOCKET, sockaddr_in>> m_connections;
 	SOCKET m_listening;
+
+	std::unique_ptr<Logger> logger;
 };
 

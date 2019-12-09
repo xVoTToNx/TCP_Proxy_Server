@@ -5,7 +5,7 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-void HandleMyMessages(TCPListener* listener, int client_socket, std::string message);
+// DO MAGIC
 
 int main()
 {
@@ -13,9 +13,6 @@ int main()
 
 	if (server.Init())
 		server.Run();
-}
-
-void HandleMyMessages(TCPListener* listener, int client_socket, std::string message)
-{
-	listener->Send(client_socket, message);
+	else
+		std::cerr << "Could not initialize proxy-server.";
 }

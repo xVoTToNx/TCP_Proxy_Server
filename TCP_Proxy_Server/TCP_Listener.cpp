@@ -5,6 +5,7 @@ TCPListener::TCPListener(std::string listening_ip_adress, int listening_port, st
 	, m_port(listening_port)
 	, m_proxy_ip_adress(proxy_ip_adress)
 	, m_proxy_port(proxy_port)
+	, logger(std::make_unique<Logger>(std::string(LOG_PATH)))
 {
 }
 
@@ -21,7 +22,7 @@ bool TCPListener::Init()
 	int wsOK = WSAStartup(word, &wsData);
 	if (wsOK != 0)
 	{
-		std::cerr << "Error initializing WSADATA.\n";
+		log_error("Error initializing WSADATA.");
 		return false;
 	}
 
@@ -34,12 +35,11 @@ void TCPListener::Run()
 	m_listening = createListenerSocket();
 	if (m_listening == INVALID_SOCKET)
 	{
-		std::cerr << "Could not create listening socket.\n";
+		log_error("Could not create listening socket.");
 		return;
 	}
 
 	FD_ZERO(&m_sockets);
-
 	FD_SET(m_listening, &m_sockets);
 
 	while (true)
@@ -53,10 +53,7 @@ void TCPListener::Run()
 			{
 				int acceptOK = acceptNewConnection(buf, BUFFER_SIZE);
 				if (acceptOK != 0)
-				{
-					std::cin.get();
 					return;
-				}
 			}
 			else
 			{
@@ -65,68 +62,67 @@ void TCPListener::Run()
 
 				int byte_received = recv(current_socket, buf, BUFFER_SIZE, 0);
 
-				if (byte_received > 0)
+				if (m_connections.find(current_socket) != m_connections.end())
 				{
-					if (m_connections.find(current_socket) != m_connections.end())
+					auto client_iter = m_connections.find(current_socket);
+
+					if (client_iter == m_connections.end())
+						continue;
+
+					auto client = client_iter->second;
+
+
+
+					if (byte_received > 0)
 					{
-						auto client = m_connections.find(current_socket)->second;
-						char address_str[INET_ADDRSTRLEN];
-						inet_ntop(AF_INET, &(client.second.sin_addr), address_str, INET_ADDRSTRLEN);
-						std::cout << "Sending to client     " << address_str << "     " << byte_received << "     bytes.\n\n";
+						log("Sending to client\t" + sockaddrToString(client.second) + "\t->\t"
+							+ std::to_string(byte_received) + "\tbytes.");
 						send(client.first, buf, byte_received, 0);
 					}
 					else
 					{
-						auto proxy_iter = std::find_if(m_connections.begin(), m_connections.end(), 
-							[current_socket](std::pair<SOCKET, std::pair<SOCKET, sockaddr_in>> const& iter)
-							{ return iter.second.first == current_socket; });
-
-						SOCKET proxy = proxy_iter->first;
-						sockaddr_in from_client_address = proxy_iter->second.second;
-						char address_str[INET_ADDRSTRLEN];
-						inet_ntop(AF_INET, &(from_client_address.sin_addr), address_str, INET_ADDRSTRLEN);
-						std::cout << "Sending to proxy     " << byte_received << "     bytes from     " << address_str << ".\n\n";
-						send(proxy, buf, byte_received, 0);
+						log("Proxy from client\t" + sockaddrToString(client.second) + "\tclosed.");
+						closePairOfSockets(current_socket, client.first);
 					}
 				}
 				else
 				{
-					if (m_connections.find(current_socket) != m_connections.end())
+
+					auto proxy_iter = std::find_if(m_connections.begin(), m_connections.end(), 
+						[current_socket](std::pair<SOCKET, std::pair<SOCKET, sockaddr_in>> const& iter)
+						{ return iter.second.first == current_socket; });
+
+					if (proxy_iter == m_connections.end())
+						continue;
+
+					SOCKET proxy = proxy_iter->first;
+					sockaddr_in from_client_address = proxy_iter->second.second;
+
+					if (byte_received > 0)
 					{
-						auto client = m_connections.find(current_socket)->second;
-						char address_str[INET_ADDRSTRLEN];
-						inet_ntop(AF_INET, &(client.second.sin_addr), address_str, INET_ADDRSTRLEN);
-						std::cout << "Proxy from client     " << address_str << "     closed.\n\n";
-						FD_CLR(current_socket, &m_sockets);
-						closesocket(current_socket);
+						log("Sending to proxy\t" + std::to_string(byte_received) + "\t->\tbytes from\t" + 
+							sockaddrToString(from_client_address) + ".");
+						send(proxy, buf, byte_received, 0);
 
-						//FD_CLR(client.first, &m_sockets);
-						//closesocket(client.first);
+						if (byte_received > 4)
+						{
+							unsigned int size = buf[0];
+							unsigned int code = buf[4];
 
-						m_connections.erase(current_socket);
+							if ((code == 3 || code == 25 || code == 22) && size > 5)
+							{
+								std::string log_str(buf, byte_received);
+								log_str = log_str.substr(5);
+								logger->AddLog(log_str);
+							}
+						}
 					}
 					else
 					{
-						auto proxy_iter = std::find_if(m_connections.begin(), m_connections.end(),
-							[current_socket](std::pair<SOCKET, std::pair<SOCKET, sockaddr_in>> const& iter)
-						{ return iter.second.first == current_socket; });
-
-						SOCKET proxy = proxy_iter->first;
-						sockaddr_in from_client_address = proxy_iter->second.second;
-						char address_str[INET_ADDRSTRLEN];
-						inet_ntop(AF_INET, &(from_client_address.sin_addr), address_str, INET_ADDRSTRLEN);
-						std::cout << "Client     " << address_str << "     closed.\n\n";
-						
-						FD_CLR(current_socket, &m_sockets);
-						closesocket(current_socket);
-
-						//FD_CLR(proxy, &m_sockets);
-						//closesocket(proxy);
-
-						//m_connections.erase(proxy);
+						log("Client\t" + sockaddrToString(from_client_address) + "\tclosed.");
+						closePairOfSockets(proxy, current_socket);
 					}
 				}
-
 			}
 		}
 	}
@@ -188,7 +184,7 @@ int TCPListener::acceptNewConnection(char* buf, int length)
 	SOCKET new_database_connection = socket(AF_INET, SOCK_STREAM, 0);
 	if (new_database_connection == INVALID_SOCKET)
 	{
-		std::cerr << "Error initializing listening socket.\n";
+		log_error("Error initializing listening socket.");
 		return -1;
 	}
 
@@ -200,7 +196,7 @@ int TCPListener::acceptNewConnection(char* buf, int length)
 	int connect_result = connect(new_database_connection, reinterpret_cast<sockaddr*>(&hint), sizeof(hint));
 	if (connect_result == SOCKET_ERROR)
 	{
-		std::cerr << "Connection error " << WSAGetLastError() << "\n";
+		log_error("Connection error " + WSAGetLastError());
 		return -1;
 	}
 
@@ -210,15 +206,8 @@ int TCPListener::acceptNewConnection(char* buf, int length)
 		(new_database_connection, std::pair<SOCKET, sockaddr_in>(new_client, new_client_adress)));
 
 
-	// Log into console
-	char address_str[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(new_client_adress.sin_addr), address_str, INET_ADDRSTRLEN);
-
-	char address_str_2[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(hint.sin_addr), address_str_2, INET_ADDRSTRLEN);
-
-	std::cout << "Established new connection\n" << address_str << ":" << new_client_adress.sin_port
-		<< "   ->   " << address_str_2 << ":" << hint.sin_port << "\n\n";
+	log("Established new connection\n" + sockaddrToString(new_client_adress) + 
+		"   ->   " + sockaddrToString(hint));
 
 
 	// Connect these two with exchanging accepting packets
@@ -234,4 +223,34 @@ SOCKET TCPListener::waitForConnection(SOCKET listen_socket)
 	SOCKET client = accept(listen_socket, nullptr, nullptr);
 	return client;
 }
+
+void TCPListener::closePairOfSockets(SOCKET proxy, SOCKET client)
+{
+	FD_CLR(client, &m_sockets);
+	closesocket(client);
+
+	FD_CLR(proxy, &m_sockets);
+	closesocket(proxy);
+
+	m_connections.erase(proxy);
+}
+
+std::string TCPListener::sockaddrToString(sockaddr_in& address)
+{
+	char address_str[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(address.sin_addr), address_str, INET_ADDRSTRLEN);
+
+	return std::string(address_str) + ":" + std::to_string(address.sin_port);
+}
+
+void TCPListener::log(std::string str)
+{
+	std::cout << str << "\n\n";
+}
+
+void TCPListener::log_error(std::string str)
+{
+	std::cout << "ERROR: " << str << "\n\n";
+}
+
 
