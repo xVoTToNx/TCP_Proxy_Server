@@ -9,7 +9,7 @@ void HandleMyMessages(TCPListener* listener, int client_socket, std::string mess
 
 int main()
 {
-	TCPListener server("", 54000, HandleMyMessages);
+	TCPListener server("", 54000, "127.0.0.1", 3306);
 
 	if (server.Init())
 		server.Run();
