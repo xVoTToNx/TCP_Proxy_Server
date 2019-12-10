@@ -14,8 +14,10 @@ class Logger
 	std::list<std::string> string_pool;
 	std::ofstream log_file;
 	std::condition_variable if_pool_empty;
-	std::mutex writing_to_file_mutex;
+	std::mutex waiting_for_pool;
 	std::mutex writing_to_pool_mutex;
+
+	int quit;
 
 public:
 	Logger(std::string log_file_path);
@@ -24,5 +26,5 @@ public:
 	void AddLog(std::string& const str);
 
 private:
-	void writeToFile();
+	void writeToFile(int* quit);
 };

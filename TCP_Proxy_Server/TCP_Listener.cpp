@@ -42,6 +42,7 @@ void TCPListener::Run()
 	FD_ZERO(&m_sockets);
 	FD_SET(m_listening, &m_sockets);
 
+	// Main server loop
 	while (true)
 	{
 		fd_set copy_connections = m_sockets;
@@ -62,6 +63,7 @@ void TCPListener::Run()
 
 				int byte_received = recv(current_socket, buf, BUFFER_SIZE, 0);
 
+				// If sender is databse
 				if (m_connections.find(current_socket) != m_connections.end())
 				{
 					auto client_iter = m_connections.find(current_socket);
@@ -72,65 +74,72 @@ void TCPListener::Run()
 					auto client = client_iter->second;
 
 
-
+					// If database sent smth useful
 					if (byte_received > 0)
 					{
 						log("Sending to client\t" + sockaddrToString(client.second) + "\t->\t"
 							+ std::to_string(byte_received) + "\tbytes.");
 						send(client.first, buf, byte_received, 0);
 					}
+					// If database closed the connection
 					else
 					{
 						log("Proxy from client\t" + sockaddrToString(client.second) + "\tclosed.");
+
+						// Close corresponding client as well
 						closePairOfSockets(current_socket, client.first);
 					}
 				}
+				// If sender is client
 				else
 				{
-
-					auto proxy_iter = std::find_if(m_connections.begin(), m_connections.end(), 
+					// Find it's server socket
+					auto server_iter = std::find_if(m_connections.begin(), m_connections.end(), 
 						[current_socket](std::pair<SOCKET, std::pair<SOCKET, sockaddr_in>> const& iter)
 						{ return iter.second.first == current_socket; });
 
-					if (proxy_iter == m_connections.end())
+					if (server_iter == m_connections.end())
 						continue;
 
-					SOCKET proxy = proxy_iter->first;
-					sockaddr_in from_client_address = proxy_iter->second.second;
+					SOCKET server = server_iter->first;
+					sockaddr_in from_client_address = server_iter->second.second;
 
+					// If client sent smth useful
 					if (byte_received > 0)
 					{
 						log("Sending to proxy\t" + std::to_string(byte_received) + "\t->\tbytes from\t" + 
 							sockaddrToString(from_client_address) + ".");
-						send(proxy, buf, byte_received, 0);
+						send(server, buf, byte_received, 0);
 
+						// If it's not an OK packet for example
 						if (byte_received > 4)
 						{
 							unsigned int size = buf[0];
+
+							// Command code
 							unsigned int code = buf[4];
 
-							if ((code == 3 || code == 25 || code == 22) && size > 5)
+							if ((code == MySQL_Commands::COM_QUERY || code == MySQL_Commands::COM_PREPARE) && size > 5)
 							{
+								// Log it from the 6th byte, because first 5 bytes contains packet information.
 								std::string log_str(buf, byte_received);
 								log_str = log_str.substr(5);
 								logger->AddLog(log_str);
 							}
 						}
 					}
+					// If client closed the connection
 					else
 					{
 						log("Client\t" + sockaddrToString(from_client_address) + "\tclosed.");
-						closePairOfSockets(proxy, current_socket);
+
+						// Close corresponding server as well
+						closePairOfSockets(server, current_socket);
 					}
 				}
 			}
 		}
 	}
-}
-
-void TCPListener::Send(int client_socket, std::string const& message)
-{
-	send(client_socket, message.c_str(), message.size() + 1, 0);
 }
 
 void TCPListener::Cleanup()

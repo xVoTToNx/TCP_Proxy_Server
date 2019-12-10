@@ -11,7 +11,7 @@
 
 #include "Logger.h"
 
-#define BUFFER_SIZE (4096)
+#define BUFFER_SIZE (4096 * 16)
 #define LOG_PATH ("log.txt")
 
 class TCPListener
@@ -22,8 +22,16 @@ public:
 
 	bool Init();
 	void Run();
-	void Send(int client_socket, std::string const& message);
 	void Cleanup();
+
+	enum MySQL_Commands
+	{
+		// Tell mysql server to execute a query
+		COM_QUERY = 3,
+
+		// Tel mysql server to prepare a statement for execution
+		COM_PREPARE = 22
+	};
 
 private:
 	SOCKET createListenerSocket();

@@ -5,8 +5,6 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-// DO MAGIC
-
 int main()
 {
 	TCPListener server("", 54000, "127.0.0.1", 3306);
