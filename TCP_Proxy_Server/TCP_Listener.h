@@ -1,7 +1,7 @@
 #pragma once
 
-#include "TCP_Proxy_Server/Utility.h"
-#include "TCP_Proxy_Server/TCP_Handler.h"
+#include "Utility.h"
+#include "TCP_Handler.h"
 
 class TCPListener
 {
