@@ -7,7 +7,7 @@
 
 int main()
 {
-	TCPListener server("", 54000, "127.0.0.1", 3306);
+	TCPListener server("", 54000, "127.0.0.1", 3306, std::string(LOG_PATH));
 
 	if (server.Init())
 		server.Run();

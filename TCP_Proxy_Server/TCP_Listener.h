@@ -1,48 +1,26 @@
 #pragma once
 
-#include <string>
-#include <algorithm>
-#include <iostream>
-#include <WS2tcpip.h>
-#include <map>
-#include <memory>
-
-#pragma comment(lib, "ws2_32.lib")
-
-#include "Logger.h"
-
-#define BUFFER_SIZE (4096 * 16)
-#define LOG_PATH ("log.txt")
+#include "TCP_Proxy_Server/Utility.h"
+#include "TCP_Proxy_Server/TCP_Handler.h"
 
 class TCPListener
 {
 public:
-	TCPListener(std::string listening_ip_adress, int listening_port, std::string proxy_ip_adress, int proxy_port);
+	TCPListener(std::string listening_ip_adress, int listening_port, 
+		std::string proxy_ip_adress, int proxy_port, std::string log_path);
 	~TCPListener();
 
 	bool Init();
 	void Run();
-	void Cleanup();
-
-	enum MySQL_Commands
-	{
-		// Tell mysql server to execute a query
-		COM_QUERY = 3,
-
-		// Tel mysql server to prepare a statement for execution
-		COM_PREPARE = 22
-	};
 
 private:
 	SOCKET createListenerSocket();
 	int acceptNewConnection(char* buf, int length);
-	SOCKET waitForConnection(SOCKET listen_socket);
-	void closePairOfSockets(SOCKET proxy, SOCKET client);
-	std::string sockaddrToString(sockaddr_in& address);
-	void log(std::string str);
-	void log_error(std::string str);
+	SOCKET waitForConnection(SOCKET const listen_socket);
 
-
+	void sendToClient(data_pair&& data, SOCKET const client_socket);
+	void sendToDatabase(data_pair&& data, SOCKET const database_socket);
+	void closePairOfSockets(SOCKET const proxy, SOCKET const client);
 
 	std::string m_ip_adress;
 	int m_port;
@@ -50,9 +28,11 @@ private:
 	int m_proxy_port;
 
 	fd_set m_sockets;
-	std::map<SOCKET, std::pair<SOCKET, sockaddr_in>> m_connections;
-	SOCKET m_listening;
+	connection_map_ptr m_connections;
+	SOCKET m_listening_socket;
 
-	std::unique_ptr<Logger> logger;
+	std::unique_ptr<TCPHandler> tcp_handler;
+
+	friend TCPHandler;
 };
 
